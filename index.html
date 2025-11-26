@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agni's Balloon Shooter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght @400;700&family=Wallpoet&display=swap');
+        
+        /* Define Neon Colors */
+        :root {
+            --neon-color: #39ff14; /* Neon Green */
+            --dark-bg: #111827; /* Dark Slate */
+            --text-color: #f3f4f6;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        /* Neon Glow Effect */
+        .neon-glow {
+            text-shadow: 0 0 5px var(--neon-color), 0 0 10px var(--neon-color), 0 0 20px var(--neon-color);
+        }
+
+        /* Canvas Styling */
+        canvas {
+            display: block;
+            background-color: #0c1815; /* Darker green tint */
+            border-radius: 1rem;
+            border: 2px solid var(--neon-color);
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.6), 0 0 20px rgba(57, 255, 20, 0.4);
+            margin-top: 1rem;
+            cursor: none;
+            transition: box-shadow 0.3s;
+        }
+
+        /* Popup Styling */
+        .popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7); 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .popup-content {
+            padding: 1.5rem; 
+            border-radius: 1rem;
+            max-width: 90%;
+            width: 380px; 
+            background-color: #1f2937;
+            border: 2px solid var(--neon-color);
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.8);
+            color: var(--text-color);
+        }
+        
+        /* Button Styling (Neon) */
+        .control-button {
+            transition: all 0.2s, box-shadow 0.3s;
+            background-color: #1f2937;
+            border: 1px solid var(--neon-color);
+            color: var(--neon-color);
+            box-shadow: 0 0 5px rgba(57, 255, 20, 0.6);
+        }
+        .control-button:hover {
+            transform: scale(1.05);
+            background-color: var(--neon-color);
+            color: var(--dark-bg);
+            box-shadow: 0 0 15px var(--neon-color), 0 0 25px var(--neon-color);
+        }
+
+        /* Scoreboard & Lives */
+        #scoreboard, #lives-display {
+            font-family: 'Wallpoet', monospace;
+            color: var(--neon-color);
+            background-color: #1f2937;
+            border: 1px solid var(--neon-color);
+            box-shadow: 0 0 5px rgba(57, 255, 20, 0.8);
+            transition: box-shadow 0.2s;
+        }
+
+        /* Styling for the mobile fire button to be fixed */
+        #fire-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 70px;
+            height: 70px;
+            z-index: 500;
+        }
+        
+        /* Animation for life loss feedback */
+        @keyframes life-lost-flash {
+            0% { background-color: #ff0000; color: white; }
+            100% { background-color: transparent; color: var(--neon-color); }
+        }
+
+        .life-lost {
+            animation: life-lost-flash 0.3s ease-out;
+        }
+
+        /* Utility for touch devices, hides controls when touch is detected */
+        @media (min-width: 768px) {
+            #fire-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center p-4 min-h-screen">
+
+    <!-- Header: Title centered, Scores/Lives below -->
+    <header class="w-full max-w-2xl flex flex-col mb-4">
+        <!-- New Centered Title -->
+        <h1 class="text-4xl font-bold text-white neon-glow text-center mb-4 font-['Wallpoet']">Agni's Balloon Shooter</h1>
+        
+        <!-- Scores and Lives Row -->
+        <div class="flex justify-between items-center">
+            <!-- Lives Display -->
+            <div id="lives-display" class="text-2xl font-mono px-4 py-2 rounded-lg shadow flex items-center space-x-2">
+                <!-- Hearts will be injected here by JS -->
+            </div>
+    
+            <!-- Scoreboard -->
+            <div id="scoreboard" class="text-xl font-mono px-4 py-2 rounded-lg shadow">Score: 0</div>
+        </div>
+    </header>
+
+    <!-- Control Bar -->
+    <div class="w-full max-w-2xl flex justify-center items-center space-x-2 md:space-x-4 mb-4">
+        <button id="pause-play-btn" class="control-button font-bold py-2 px-4 rounded-full">Pause</button>
+        <button id="sound-toggle-btn" class="control-button font-bold py-2 px-4 rounded-full">Sound Off</button>
+        <!-- Theme toggle is permanently hidden for the neon theme -->
+        <button id="theme-toggle-btn" class="control-button font-bold py-2 px-4 rounded-full hidden">Dark/Light</button>
+    </div>
+
+    <!-- Powerup Status -->
+    <div id="powerup-status" class="w-full max-w-2xl text-center text-lg font-semibold neon-glow text-red-400 mb-2 h-6"></div>
+
+    <!-- Game Canvas -->
+    <canvas id="game-canvas" class="w-full max-w-2xl"></canvas>
+    
+    <!-- Mobile Fire Button -->
+    <button id="fire-btn" class="control-button bg-red-800 hover:bg-red-900 text-white font-bold rounded-full flex items-center justify-center text-3xl">
+        &#x1F52B; <!-- Pistol emoji -->
+    </button>
+
+    <!-- Audio Elements (Muted by default to prevent auto-play policy issues) -->
+    <audio id="shoot-sound" src="https://freesound.org/data/previews/203/203207_3408017-lq.mp3" preload="auto" muted></audio>
+    <audio id="pop-sound" src="https://freesound.org/data/previews/320/320875_5288225-lq.mp3" preload="auto" muted></audio>
+    <audio id="bg-music" src="https://freesound.org/data/previews/273/273187_33454-lq.mp3" loop preload="auto" muted></audio>
+    
+    <!-- NEW AUDIO ELEMENTS -->
+    <!-- Bomb Blast (Game Over) Sound -->
+    <audio id="bomb-blast-sound" src="https://freesound.org/data/previews/143/143929_2393247-lq.mp3" preload="auto" muted></audio>
+    <!-- Powerup (Gun/Shield/Life) Pickup Sound (Chime) -->
+    <audio id="powerup-sound" src="https://freesound.org/data/previews/186/186851_2069818-lq.mp3" preload="auto" muted></audio>
+    <!-- Life Loss/Hit Sound (Negative Buzzer) -->
+    <audio id="life-loss-sound" src="https://freesound.org/data/previews/327/327318_5625725-lq.mp3" preload="auto" muted></audio>
+
+
+    <!-- 1. Instruction/Start Popup -->
+    <div id="instruction-popup" class="popup">
+        <div class="popup-content text-center">
+            <h2 class="text-3xl font-bold mb-4 neon-glow text-white">Agni's Balloon Shooter Instructions</h2>
+            <p class="mb-4">Defend your artillery gun! You have <span class="text-red-400 font-bold">5 LIVES</span>. Lose a life if a non-bomb balloon reaches the bottom.</p>
+            
+            <div class="mb-6 p-3 bg-gray-800 rounded-lg">
+                <p class="font-semibold mb-2 text-white">Controls:</p>
+                <ul class="text-sm list-disc list-inside space-y-1 text-gray-300">
+                    <li>Move: Arrow Keys (Left/Right) or Mouse/Touch Drag.</li>
+                    <li>Fire: Spacebar or the Fire button (touch).</li>
+                </ul>
+                <p class="mt-2 text-sm text-yellow-300">Look out for **🔫 Gun**, **♥ Life**, and **🛡️ Shield** power-ups! Power-ups are rare.</p>
+                <p class="mt-2 text-sm text-red-400 font-bold">WARNING: Hitting a bomb (💀) is instant Game Over!</p>
+            </div>
+
+            <div class="mb-6">
+                <label for="difficulty" class="block text-xl font-semibold mb-2">Difficulty (Balloon Spawn Rate):</label>
+                <input type="range" id="difficulty" min="1" max="10" value="5" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                <div class="flex justify-between text-sm mt-1">
+                    <span>Easy (1)</span>
+                    <span>Hard (10)</span>
+                </div>
+            </div>
+
+            <button class="close-button font-bold py-3 px-8 rounded-full text-lg control-button hover:bg-indigo-700">
+                START GAME
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Game Over Popup -->
+    <div id="game-over-popup" class="popup hidden">
+        <div class="popup-content text-center border-red-500 bg-red-900/50">
+            <h2 class="text-4xl font-extrabold mb-4 text-red-400 neon-glow">GAME OVER!</h2>
+            <p class="text-2xl mb-4 text-white">Final Score: <span id="final-score" class="font-mono text-red-200 neon-glow">0</span></p>
+            <p class="mb-6 text-gray-200">Lives ran out or you shot a bomb!</p>
+            <button class="start-button font-bold py-3 px-8 rounded-full text-lg control-button hover:bg-green-700">
+                PLAY AGAIN
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME INITIALIZATION ---
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const instructionPopup = document.getElementById('instruction-popup');
+        const gameOverPopup = document.getElementById('game-over-popup');
+        const closeButton = instructionPopup.querySelector('.close-button'); 
+        const startButton = gameOverPopup.querySelector('.start-button'); 
+        const scoreboard = document.getElementById('scoreboard');
+        const finalScoreEl = document.getElementById('final-score');
+        const livesDisplay = document.getElementById('lives-display'); 
+        const pausePlayBtn = document.getElementById('pause-play-btn');
+        const soundToggleBtn = document.getElementById('sound-toggle-btn');
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const fireBtn = document.getElementById('fire-btn');
+        const powerupStatusEl = document.getElementById('powerup-status');
+        
+        const difficultySlider = document.getElementById('difficulty');
+
+        // Existing Audio
+        const shootSound = document.getElementById('shoot-sound');
+        const popSound = document.getElementById('pop-sound');
+        const bgMusic = document.getElementById('bg-music');
+        
+        // NEW AUDIO
+        const bombBlastSound = document.getElementById('bomb-blast-sound');
+        const powerupSound = document.getElementById('powerup-sound');
+        const lifeLossSound = document.getElementById('life-loss-sound');
+
+
+        let player;
+        let projectiles = [];
+        let balloons = [];
+        let particles = [];
+        let gunPowerups = [];
+        let lifePowerups = []; 
+        let shieldPowerups = []; 
+        let score = 0;
+        let lives = 5; 
+        const MAX_LIVES = 5; 
+        let gameRunning = false;
+        let isPaused = false;
+        let isMuted = true; 
+        let keys = {};
+        let isShooting = false;
+        let shootInterval;
+        let balloonSpawnRate; 
+
+        // Power-up state
+        let multiGunActive = false;
+        let multiGunTimer = 0; // Frames remaining (60 frames/second)
+        let shieldActive = false; 
+        let shieldTimer = 0; // Frames remaining (60 frames/second)
+
+        // --- GAME CLASSES ---
+
+        class Player {
+            constructor() {
+                this.width = 100;
+                this.height = 30; // Shorter base for artillery
+                this.x = canvas.width / 2 - this.width / 2;
+                this.y = canvas.height - this.height;
+                this.speed = 10;
+                this.barrelAngle = -80 * (Math.PI / 180); // 80 degrees up
+                this.barrelLength = 60;
+                this.barrelWidth = 15;
+            }
+
+            draw() {
+                const centerX = this.x + this.width / 2;
+                const baseHeight = 15;
+                const pivotY = this.y + baseHeight;
+
+               // --- Enhanced Cannon Drawing ---
+
+// Define constants for the new, taller design
+const BASE_VISUAL_HEIGHT = 60; 
+const PIVOT_RADIUS = 18;
+const BARREL_LENGTH_MULTIPLIER = 1.6; // Make the barrel 60% longer
+const TOWER_COLOR = '#3B3C42'; // Dark Grey/Black for the tower
+const ARMOR_COLOR = '#6E737C'; // Medium Grey for highlights
+
+// Calculate new center and pivot points based on the taller base
+// Assuming this.y is the bottom Y coordinate (ground level)
+const topOfBaseY = this.y - BASE_VISUAL_HEIGHT;
+const centerX = this.x + this.width / 2;
+// The pivot is located near the top of the visual base
+const pivotY = topOfBaseY + PIVOT_RADIUS; 
+
+// 1. Draw the Armored Base (Taller, fixed lower body)
+// Bottom Anchor (Darker)
+ctx.fillStyle = '#2A2B30'; 
+ctx.fillRect(this.x, this.y - 10, this.width, 10);
+
+// Main Tower (Taller, with rounded corners/slight taper, but using rect for simplicity)
+ctx.fillStyle = TOWER_COLOR;
+// Draw the main tower section
+ctx.fillRect(this.x + 5, this.y - BASE_VISUAL_HEIGHT, this.width - 10, BASE_VISUAL_HEIGHT);
+
+// Add a slight highlight/armor plate to the front of the tower
+ctx.fillStyle = ARMOR_COLOR;
+ctx.beginPath();
+ctx.moveTo(this.x + 5, topOfBaseY + 15);
+ctx.lineTo(this.x + 5, this.y - 10);
+ctx.lineTo(this.x + this.width - 5, this.y - 10);
+ctx.lineTo(this.x + this.width - 5, topOfBaseY + 15);
+ctx.fill();
+
+
+// 2. Draw the Gun Mount (Pivot point - Larger and more prominent)
+ctx.fillStyle = '#9C9EA3'; // Metallic Silver
+ctx.beginPath();
+ctx.arc(centerX, pivotY, PIVOT_RADIUS, 0, Math.PI * 2);
+ctx.fill();
+
+// 3. Draw the Barrel
+ctx.save();
+ctx.translate(centerX, pivotY);
+
+// Rotate to the angle (e.g., 80 degrees up)
+// The barrel angle should be adjusted for the new look, ensuring a strong upward angle is possible
+ctx.rotate(this.barrelAngle); 
+
+// Calculate the new, longer barrel length
+const actualBarrelLength = this.barrelLength * BARREL_LENGTH_MULTIPLIER;
+const actualBarrelWidth = this.barrelWidth;
+
+// Draw the main barrel (Thicker, darker steel)
+ctx.fillStyle = '#44464D';
+// The Y start is slightly inside the pivot mount (e.g., -5) and extends upwards (negative Y direction)
+ctx.fillRect(-actualBarrelWidth / 2, -5, actualBarrelWidth, -actualBarrelLength); 
+
+// Draw a detail line on the main barrel
+ctx.fillStyle = '#6E737C';
+ctx.fillRect(-actualBarrelWidth / 2 + 2, -10, actualBarrelWidth - 4, 3);
+
+
+// Draw the side barrels for Multi-Gun Mode (Futuristic Energy Rails)
+if (multiGunActive) {
+    const ENERGY_COLOR = 'rgba(0, 255, 255, 0.9)'; // Electric Cyan
+    const sideBarrelWidth = 5;
+    const sideBarrelOffset = actualBarrelWidth / 2 + 3;
+    
+    // Left Energy Rail
+    ctx.fillStyle = ENERGY_COLOR; 
+    // Offset X to the left, Y starts a bit down, extends up
+    ctx.fillRect(-sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
+
+    // Right Energy Rail
+    ctx.fillRect(sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
+}
+
+// Restore context rotation and translation
+ctx.restore();
+
+                ctx.restore(); // Restore all translations and rotations
+
+                // 4. Draw Shield effect
+                if (shieldActive) {
+                    ctx.strokeStyle = 'cyan';
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    // Pulse effect
+                    const shieldPulse = Math.sin(Date.now() / 150) * 5; 
+                    ctx.arc(centerX, pivotY, this.width * 0.7 + shieldPulse, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+
+            update() {
+                if (keys['ArrowLeft'] && this.x > 0) {
+                    this.x -= this.speed;
+                }
+                if (keys['ArrowRight'] && this.x < canvas.width - this.width) {
+                    this.x += this.speed;
+                }
+                // Clamp position if moved via mouse/touch
+                this.x = Math.max(0, Math.min(this.x, canvas.width - this.width));
+            }
+        }
+
+        class Projectile {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 7;
+                this.speed = 15;
+                this.color = 'orange';
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+
+            update() {
+                this.y -= this.speed;
+            }
+        }
+
+        class Balloon {
+            constructor() {
+                this.radius = Math.random() * 30 + 20;
+                this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
+                this.y = -this.radius;
+                const baseSpeed = Math.random() * 1.5 + 0.5;
+                const intensity = parseFloat(difficultySlider.value);
+                const difficultyFactor = (intensity / 10) * 1.5;
+                this.speed = baseSpeed + difficultyFactor; 
+                this.isBomb = Math.random() < 0.05; 
+                this.color = this.isBomb ? '#333' : `hsl(${Math.random() * 360}, 100%, 50%)`;
+                this.maxHealth = Math.floor(this.radius / 10) || 1; 
+                this.health = this.maxHealth;
+                this.points = Math.floor(60 - this.radius);
+            }
+
+            draw() {
+                ctx.save();
+                
+                if (this.isBomb) {
+                    // Bomb visualization: Black with intense red glow
+                    ctx.strokeStyle = '#ff0000'; 
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = '#ff4500'; 
+                    ctx.shadowBlur = 15;
+                    
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = '#111'; // Black core
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.shadowBlur = 0; 
+                    ctx.lineWidth = 1;
+                    
+                    // Skull emoji
+                    ctx.fillStyle = '#fff';
+                    ctx.font = `${this.radius}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('💀', this.x, this.y);
+
+                } else {
+                    // Regular Balloon visualization
+                    if (this.health < this.maxHealth) {
+                        ctx.globalAlpha = 0.5 + (this.health / this.maxHealth) * 0.5;
+                    }
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+        }
+
+        class GunPowerUp {
+            constructor() {
+                this.width = 50;
+                this.height = 50;
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = -this.height;
+                this.speed = 2;
+                this.health = 3;
+            }
+
+            draw() {
+                ctx.fillStyle = 'gold';
+                ctx.font = '40px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🔫', this.x + this.width / 2, this.y + this.height / 2); 
+                
+                // Health Indicator
+                ctx.fillStyle = 'white';
+                ctx.fillRect(this.x, this.y + this.height + 5, this.width, 10);
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x, this.y + this.height + 5, this.width * (this.health / 3), 10);
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+        }
+
+        class LifePowerUp {
+            constructor() {
+                this.width = 50;
+                this.height = 50;
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = -this.height;
+                this.speed = 2;
+                this.health = 1; // One hit to collect
+            }
+
+            draw() {
+                ctx.fillStyle = 'white';
+                ctx.font = '40px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // Using a stylized heart emoji
+                ctx.fillText('♥', this.x + this.width / 2, this.y + this.height / 2 + 5); 
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+        }
+        
+        class ShieldPowerUp {
+            constructor() {
+                this.width = 50;
+                this.height = 50;
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = -this.height;
+                this.speed = 2;
+                this.health = 1; // One hit to collect
+            }
+
+            draw() {
+                ctx.fillStyle = 'cyan';
+                ctx.font = '40px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // Using a shield emoji
+                ctx.fillText('🛡️', this.x + this.width / 2, this.y + this.height / 2); 
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+        }
+
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * 3 + 1;
+                this.vx = (Math.random() - 0.5) * 5;
+                this.vy = (Math.random() - 0.5) * 5;
+                this.alpha = 1;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= 0.05;
+            }
+        }
+
+        // --- GAME FUNCTIONS ---
+
+        function playSound(audioEl) {
+            if (!isMuted) {
+                audioEl.currentTime = 0;
+                audioEl.play().catch(e => console.error("Sound playback failed:", e));
+            }
+        }
+
+        function gainLife() {
+            playSound(powerupSound); // Play positive sound for gaining life
+            if (lives < MAX_LIVES) {
+                lives++;
+                updateLivesUI();
+                powerupStatusEl.textContent = '♥ EXTRA LIFE GAINED!';
+            } else {
+                powerupStatusEl.textContent = '♥ MAX LIVES REACHED! (Points +100)';
+                score += 100;
+                scoreboard.textContent = `Score: ${score}`;
+            }
+            // Clear status after a moment
+            setTimeout(() => {
+                if (powerupStatusEl.textContent.includes('LIFE') || powerupStatusEl.textContent.includes('MAX LIVES')) {
+                    updatePowerupTimers(); 
+                }
+            }, 1000);
+        }
+
+        function updateLivesUI() {
+            livesDisplay.innerHTML = '';
+            for (let i = 0; i < MAX_LIVES; i++) {
+                const heart = document.createElement('span');
+                heart.className = `text-2xl transition-colors duration-300`;
+                // Use a full red heart for remaining lives, and a gray outline for lost lives
+                heart.textContent = '♥'; 
+                heart.style.color = i < lives ? '#ff4081' : '#4b5563'; // Bright Pink/Red for life, Gray for lost
+                livesDisplay.appendChild(heart);
+            }
+        }
+
+        function loseLife() {
+            if (shieldActive) {
+                // Shield takes the hit
+                powerupStatusEl.textContent = '🛡️ SHIELD ACTIVATED! Hit absorbed.';
+                // The main update loop will handle clearing the status after a delay
+                setTimeout(() => {
+                    if (powerupStatusEl.textContent.includes('SHIELD ACTIVATED')) {
+                        updatePowerupTimers(); 
+                    }
+                }, 1000);
+                return; // Shield active, block life loss
+            }
+            
+            if (lives <= 0) return;
+            
+            playSound(lifeLossSound); // Play negative sound for life loss
+
+            lives--;
+            updateLivesUI();
+
+            // Visual feedback: Flash the lives display red
+            livesDisplay.classList.add('life-lost');
+            setTimeout(() => {
+                livesDisplay.classList.remove('life-lost');
+            }, 300);
+
+            if (lives <= 0) {
+                gameOver(false); // Game Over due to life loss, not bomb
+            }
+        }
+
+        function init() {
+            // 1. Set difficulty: Adjusted for wider range
+            const intensity = parseFloat(difficultySlider.value);
+            // Scaling: 0.002 (at intensity 1) to ~0.035 (at intensity 10)
+            balloonSpawnRate = 0.002 + (intensity - 1) * 0.00366; 
+            
+            // 2. Reset game state and lives
+            resizeCanvas();
+            player = new Player();
+            projectiles = [];
+            balloons = [];
+            particles = [];
+            gunPowerups = [];
+            lifePowerups = []; 
+            shieldPowerups = []; 
+            score = 0;
+            lives = MAX_LIVES; // Reset lives
+            scoreboard.textContent = 'Score: 0';
+            updateLivesUI(); // Initialize lives UI
+            
+            // 3. Start game flags and powerup states
+            gameRunning = true;
+            isPaused = false;
+            pausePlayBtn.textContent = 'Pause';
+            multiGunActive = false;
+            multiGunTimer = 0;
+            shieldActive = false; 
+            shieldTimer = 0; 
+            powerupStatusEl.textContent = '';
+
+
+            // 4. Hide popups and start sound
+            instructionPopup.classList.add('hidden');
+            gameOverPopup.classList.add('hidden');
+
+            // 5. Play music if not muted
+            if (!isMuted) bgMusic.play().catch(e => console.log("Music auto-play failed, user interaction needed."));
+            
+            // 6. Start the game loop
+            update();
+        }
+
+        function resizeCanvas() {
+            canvas.width = Math.min(window.innerWidth * 0.9, 800);
+            canvas.height = window.innerHeight * 0.8;
+            if (player) player.y = canvas.height - player.height;
+        }
+
+        function getBarrelTipPosition(player) {
+            const centerX = player.x + player.width / 2;
+            const pivotY = player.y + 15;
+            const angle = player.barrelAngle;
+            const length = player.barrelLength; 
+
+            // Calculate tip position using trigonometry
+            // x = pivotX + length * cos(angle - 90 deg)
+            // y = pivotY + length * sin(angle - 90 deg)
+            const projectileX = centerX + length * Math.cos(angle - Math.PI / 2);
+            const projectileY = pivotY + length * Math.sin(angle - Math.PI / 2);
+            
+            return { x: projectileX, y: projectileY };
+        }
+
+        function shoot() {
+            if (gameRunning && !isPaused) {
+                const { x: mainX, y: mainY } = getBarrelTipPosition(player);
+
+                // Main projectile
+                projectiles.push(new Projectile(mainX, mainY));
+
+                // Multi-gun projectiles
+                if (multiGunActive) {
+                    // Approximate side barrel positions
+                    const sideLength = player.barrelLength * 0.75;
+                    const angleOffset = 5 * (Math.PI / 180);
+
+                    // Left barrel tip
+                    let leftX = player.x + player.width / 2 + sideLength * Math.cos(player.barrelAngle - Math.PI / 2 - angleOffset);
+                    let leftY = player.y + 15 + sideLength * Math.sin(player.barrelAngle - Math.PI / 2 - angleOffset);
+                    projectiles.push(new Projectile(leftX, leftY));
+
+                    // Right barrel tip
+                    let rightX = player.x + player.width / 2 + sideLength * Math.cos(player.barrelAngle - Math.PI / 2 + angleOffset);
+                    let rightY = player.y + 15 + sideLength * Math.sin(player.barrelAngle - Math.PI / 2 + angleOffset);
+                    projectiles.push(new Projectile(rightX, rightY));
+                }
+
+                playSound(shootSound);
+            }
+        }
+
+        function updatePowerupTimers() {
+            let statusText = '';
+            
+            // 1. Multi-Gun Timer (10 seconds)
+            if (multiGunTimer > 0) {
+                multiGunTimer--;
+                statusText += `🔫 Multi-Gun: ${Math.ceil(multiGunTimer / 60)}s`;
+                multiGunActive = true;
+            } else {
+                multiGunActive = false;
+            }
+
+            // 2. Shield Timer (12 seconds)
+            if (shieldTimer > 0) {
+                if (statusText) statusText += ' | ';
+                shieldTimer--;
+                statusText += `🛡️ Shield: ${Math.ceil(shieldTimer / 60)}s`;
+                shieldActive = true;
+            } else {
+                shieldActive = false;
+            }
+
+            powerupStatusEl.textContent = statusText;
+        }
+
+        // Game over flag: isBombHit tells us if it was a bomb that caused the loss
+        function gameOver(isBombHit) {
+            gameRunning = false;
+            clearInterval(shootInterval);
+            bgMusic.pause();
+
+            if (isBombHit) {
+                playSound(bombBlastSound);
+            }
+            
+            finalScoreEl.textContent = score;
+            gameOverPopup.classList.remove('hidden');
+        }
+
+
+        // Main Game Loop
+        function update() {
+            if (!gameRunning) return;
+            if (isPaused) {
+                requestAnimationFrame(update);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Spawn Balloons and Powerups
+            if (Math.random() < balloonSpawnRate) balloons.push(new Balloon());
+            if (Math.random() < 0.002) gunPowerups.push(new GunPowerUp());
+            if (Math.random() < 0.001) shieldPowerups.push(new ShieldPowerUp()); 
+            if (Math.random() < 0.0005) lifePowerups.push(new LifePowerUp()); 
+
+            player.update();
+            player.draw();
+
+            // 1. Update and draw projectiles (cleanup off-screen)
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.update();
+                p.draw();
+                if (p.y < 0) projectiles.splice(i, 1);
+            }
+
+            // 2. Update and draw balloons (check for game loss and hits)
+            for (let i = balloons.length - 1; i >= 0; i--) {
+                const b = balloons[i];
+                b.update();
+                b.draw();
+                
+                // Balloon missed the player - LIFE LOSS LOGIC
+                if (b.y - b.radius > canvas.height) {
+                    if (!b.isBomb) {
+                        loseLife(); // Lose a life (checks for shield inside)
+                    } 
+                    balloons.splice(i, 1); 
+                    continue; 
+                }
+                
+                // Projectile collision detection
+                for (let j = projectiles.length - 1; j >= 0; j--) {
+                    const p = projectiles[j];
+                    const dist = Math.hypot(p.x - b.x, p.y - b.y);
+
+                    if (dist - b.radius - p.radius < 1) {
+                        
+                        if (b.isBomb) {
+                            // Create dramatic black/red explosion particles
+                            for (let k = 0; k < 100; k++) {
+                                particles.push(new Particle(b.x, b.y, Math.random() < 0.5 ? '#ff4500' : '#111'));
+                            }
+                            gameOver(true); // Instant game over for hitting a bomb
+                            return;
+                        }
+                        
+                        b.health--;
+                        projectiles.splice(j, 1);
+                        
+                        if (b.health <= 0) {
+                            // Balloon popped
+                            playSound(popSound);
+                            for (let k = 0; k < b.radius / 2; k++) {
+                                particles.push(new Particle(b.x, b.y, b.color));
+                            }
+                            score += b.points;
+                            scoreboard.textContent = `Score: ${score}`;
+                            balloons.splice(i, 1);
+                            i--; 
+                            break; 
+                        }
+                    }
+                }
+            }
+
+
+            // 3. Update and draw powerups (Gun)
+            for (let i = gunPowerups.length - 1; i >= 0; i--) {
+                const gun = gunPowerups[i];
+                gun.update();
+                gun.draw();
+                if (gun.y > canvas.height) {
+                    gunPowerups.splice(i, 1);
+                    continue;
+                }
+
+                for (let j = projectiles.length - 1; j >= 0; j--) {
+                    const p = projectiles[j];
+                    const gunCenterX = gun.x + gun.width / 2;
+                    const gunCenterY = gun.y + gun.height / 2; 
+                    const dist = Math.hypot(p.x - gunCenterX, p.y - gunCenterY);
+
+                    if (dist < gun.width / 2 + p.radius) {
+                        gun.health--;
+                        projectiles.splice(j, 1);
+
+                        if (gun.health <= 0) {
+                            playSound(powerupSound); // Play positive sound for pickup
+                            multiGunActive = true;
+                            multiGunTimer = 10 * 60; // 10 seconds at 60 FPS
+                            powerupStatusEl.textContent = '🔫 MULTI-GUN ACTIVATED!';
+                            gunPowerups.splice(i, 1);
+                            break; 
+                        }
+                    }
+                }
+            }
+            
+            // 4. Update and draw powerups (Life)
+            for (let i = lifePowerups.length - 1; i >= 0; i--) {
+                const life = lifePowerups[i];
+                life.update();
+                life.draw();
+                if (life.y > canvas.height) {
+                    lifePowerups.splice(i, 1);
+                    continue;
+                }
+
+                for (let j = projectiles.length - 1; j >= 0; j--) {
+                    const p = projectiles[j];
+                    const lifeCenterX = life.x + life.width / 2;
+                    const lifeCenterY = life.y + life.height / 2; 
+                    const dist = Math.hypot(p.x - lifeCenterX, p.y - lifeCenterY);
+
+                    if (dist < life.width / 2 + p.radius) {
+                        projectiles.splice(j, 1);
+                        lifePowerups.splice(i, 1);
+                        gainLife(); // EFFECT: Gain life (calls playSound inside)
+                        i--;
+                        break;
+                    }
+                }
+            }
+
+            // 5. Update and draw powerups (Shield)
+            for (let i = shieldPowerups.length - 1; i >= 0; i--) {
+                const shield = shieldPowerups[i];
+                shield.update();
+                shield.draw();
+                if (shield.y > canvas.height) {
+                    shieldPowerups.splice(i, 1);
+                    continue;
+                }
+
+                for (let j = projectiles.length - 1; j >= 0; j--) {
+                    const p = projectiles[j];
+                    const shieldCenterX = shield.x + shield.width / 2;
+                    const shieldCenterY = shield.y + shield.height / 2; 
+                    const dist = Math.hypot(p.x - shieldCenterX, p.y - shieldCenterY);
+
+                    if (dist < shield.width / 2 + p.radius) {
+                        projectiles.splice(j, 1);
+                        shieldPowerups.splice(i, 1);
+                        playSound(powerupSound); // Play positive sound for pickup
+                        shieldActive = true;
+                        shieldTimer = 12 * 60; // EFFECT: Activate shield for 12 seconds
+                        powerupStatusEl.textContent = '🛡️ SHIELD POWERUP COLLECTED!';
+                        i--;
+                        break;
+                    }
+                }
+            }
+
+            // 6. Update and draw particles (cleanup faded particles)
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+                p.draw();
+                if (p.alpha <= 0) particles.splice(i, 1);
+            }
+
+            // 7. Update powerup timers and request next frame
+            updatePowerupTimers();
+            requestAnimationFrame(update);
+        }
+
+
+        function togglePause() {
+            isPaused = !isPaused;
+            pausePlayBtn.textContent = isPaused ? 'Play' : 'Pause';
+            if (isPaused) {
+                bgMusic.pause();
+                clearInterval(shootInterval);
+            } else {
+                if (!isMuted) bgMusic.play().catch(e => {}); 
+                if (isShooting) shootInterval = setInterval(shoot, 150);
+            }
+        }
+
+        function toggleSound() {
+            isMuted = !isMuted;
+            soundToggleBtn.textContent = isMuted ? 'Sound On' : 'Sound Off';
+            
+            // Toggle muted status for ALL audio elements
+            [bgMusic, shootSound, popSound, bombBlastSound, powerupSound, lifeLossSound].forEach(audio => {
+                audio.muted = isMuted;
+            });
+
+            if (!isMuted && gameRunning && !isPaused) {
+                bgMusic.play().catch(e => console.log("Music play failed on toggle."));
+            } else {
+                bgMusic.pause();
+            }
+        }
+
+        // --- EVENT LISTENERS (Includes mobile touch support) ---
+        
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && !isShooting && gameRunning && !isPaused) {
+                isShooting = true;
+                shootInterval = setInterval(shoot, 150);
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            if (e.code === 'Space') {
+                isShooting = false;
+                clearInterval(shootInterval);
+            }
+        });
+
+        // Mouse/Touch movement
+        canvas.addEventListener('mousemove', (e) => {
+            if (!player || isPaused) return;
+            const rect = canvas.getBoundingClientRect();
+            // Center the cannon base under the mouse/touch position
+            player.x = e.clientX - rect.left - player.width / 2;
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!player || isPaused) return;
+            const rect = canvas.getBoundingClientRect();
+            if (e.touches.length > 0) {
+                player.x = e.touches[0].clientX - rect.left - player.width / 2;
+            }
+        });
+
+        // Mobile Fire Button
+        fireBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!isShooting && gameRunning && !isPaused) {
+                isShooting = true;
+                shootInterval = setInterval(shoot, 150);
+            }
+        });
+        fireBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isShooting = false;
+            clearInterval(shootInterval);
+        });
+
+        pausePlayBtn.addEventListener('click', togglePause);
+        soundToggleBtn.addEventListener('click', toggleSound);
+
+        closeButton.addEventListener('click', init); 
+        startButton.addEventListener('click', init); 
+
+        // Initial setup
+        window.onload = () => {
+            resizeCanvas();
+            updateLivesUI();
+            instructionPopup.classList.remove('hidden');
+        };
+
+    </script>
+</body>
+</html>
