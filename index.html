@@ -121,7 +121,7 @@
     <!-- Header: Title centered, Scores/Lives below -->
     <header class="w-full max-w-2xl flex flex-col mb-4">
         <!-- New Centered Title -->
-        <h1 class="text-4xl font-bold text-white neon-glow text-center mb-4 font-['Wallpoet']">Agni's Balloon Shooter</h1>
+        <h1 class="text-4xl font-bold text-white neon-glow text-center mb-4 font-['Wallpoet']">Agni's Bubble Shooter</h1>
         
         <!-- Scores and Lives Row -->
         <div class="flex justify-between items-center">
@@ -276,6 +276,7 @@
                 this.barrelAngle = -90 * (Math.PI / 180); // Straight up
                 this.barrelLength = 60;
                 this.barrelWidth = 15;
+                this.lastX = this.x; // For tracking movement direction
 
                 // Constants for drawing the cannon
                 this.BASE_VISUAL_HEIGHT = 60;
@@ -305,7 +306,6 @@
                 const ARMOR_COLOR = '#6E737C';
                 const PIVOT_COLOR = '#9C9EA3';
                 const BARREL_COLOR = '#44464D';
-                const BARREL_DETAIL_COLOR = '#6E737C';
 
                 const pivot = this._getPivot();
                 const topOfBaseY = this.y - this.BASE_VISUAL_HEIGHT;
@@ -329,28 +329,39 @@
                 ctx.arc(pivot.x, pivot.y, this.PIVOT_RADIUS, 0, Math.PI * 2);
                 ctx.fill();
 
-                // 3. Draw the Barrel
-                ctx.save(); // Save context for rotation
-                ctx.translate(pivot.x, pivot.y);
-                ctx.rotate(this.barrelAngle);
-
+                // 3. Draw the Barrel(s)
                 const actualBarrelLength = this.barrelLength * this.BARREL_LENGTH_MULTIPLIER;
                 const actualBarrelWidth = this.barrelWidth;
 
-                ctx.fillStyle = BARREL_COLOR;
-                ctx.fillRect(-actualBarrelWidth / 2, 0, actualBarrelWidth, -actualBarrelLength);
-                ctx.fillStyle = BARREL_DETAIL_COLOR;
-                ctx.fillRect(-actualBarrelWidth / 2 + 2, -actualBarrelLength * 0.9, actualBarrelWidth - 4, 5);
+                // --- Barrel Drawing Logic ---
+                const drawBarrel = (rotationOffset, width, length, color) => {
+                    ctx.save();
+                    ctx.translate(pivot.x, pivot.y);
+                    ctx.rotate(this.barrelAngle + rotationOffset); // Apply main angle + offset
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.rect(-width / 2, 0, width, -length);
+                    ctx.fill();
+                    ctx.restore();
+                };
 
                 if (multiGunActive) {
-                    const ENERGY_COLOR = 'rgba(0, 255, 255, 0.9)';
-                    const sideBarrelWidth = 5;
-                    const sideBarrelOffset = actualBarrelWidth / 2 + 3;
-                    ctx.fillStyle = ENERGY_COLOR;
-                    ctx.fillRect(-sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
-                    ctx.fillRect(sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
+                    const sideBarrelLength = actualBarrelLength * 0.85;
+                    const sideBarrelWidth = actualBarrelWidth * 0.75;
+                    const angleOffset = 15 * (Math.PI / 180);
+                    // Draw side barrels first so main is on top
+                    drawBarrel(-angleOffset, sideBarrelWidth, sideBarrelLength, BARREL_COLOR); // Left
+                    drawBarrel(angleOffset, sideBarrelWidth, sideBarrelLength, BARREL_COLOR);  // Right
                 }
-                ctx.restore(); // Restore context after rotation
+                
+                // Draw main barrel
+                drawBarrel(0, actualBarrelWidth, actualBarrelLength, BARREL_COLOR);
+                // Add a muzzle flash effect to the main barrel
+                ctx.fillStyle = 'rgba(255, 223, 186, 0.7)';
+                ctx.beginPath();
+                ctx.arc(this.getBarrelTip().x, this.getBarrelTip().y, actualBarrelWidth/2, 0, Math.PI * 2);
+                if(isShooting) ctx.fill();
+
 
                 // 4. Draw Shield effect
                 if (shieldActive) {
@@ -364,9 +375,16 @@
             }
 
             update() {
+                const prevX = this.x;
                 if (keys['ArrowLeft'] && this.x > 0) this.x -= this.speed;
                 if (keys['ArrowRight'] && this.x < canvas.width - this.width) this.x += this.speed;
                 this.x = Math.max(0, Math.min(this.x, canvas.width - this.width));
+
+                // Barrel sway based on movement
+                const moveDelta = this.x - prevX;
+                const targetAngle = -90 * (Math.PI / 180) - (moveDelta * 0.5) * (Math.PI / 180);
+                // Smoothly interpolate to the target angle
+                this.barrelAngle += (targetAngle - this.barrelAngle) * 0.1;
             }
         }
 
@@ -485,7 +503,7 @@
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
-                this.alpha -= 0.04;
+                this.alpha -= 0.08; // Increased alpha decay for faster fade
             }
         }
 
