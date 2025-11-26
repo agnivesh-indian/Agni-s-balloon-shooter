@@ -334,13 +334,13 @@
                 const actualBarrelWidth = this.barrelWidth;
 
                 // --- Barrel Drawing Logic ---
-                const drawBarrel = (rotationOffset, width, length, color) => {
+              const drawBarrel = (rotationOffset, width, length, color) => {
     ctx.save();
-    ctx.translate(pivot.x, pivot.y); // Pivot should be where barrel "attaches"
+    ctx.translate(pivot.x, pivot.y); // Move origin to base
     ctx.rotate(this.barrelAngle + rotationOffset - Math.PI / 2); // Rotate upright
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.rect(-width / 2, 0, width, -length); // Start at the pivot, draw upwards
+    ctx.rect(-width / 2, 0, width, length); // Draw upward from base
     ctx.fill();
     ctx.restore();
 };
