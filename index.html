@@ -337,7 +337,7 @@
                 const drawBarrel = (rotationOffset, width, length, color) => {
                     ctx.save();
                     ctx.translate(pivot.x, pivot.y);
-                    ctx.rotate(this.barrelAngle + rotationOffset); // Apply main angle + offset
+                    ctx.rotate(this.barrelAngle + rotationOffset + Math.PI / 2); // Apply main angle + offset
                     ctx.fillStyle = color;
                     ctx.beginPath();
                     ctx.rect(-width / 2, 0, width, -length);
