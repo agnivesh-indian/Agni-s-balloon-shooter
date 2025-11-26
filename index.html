@@ -155,9 +155,9 @@
     </button>
 
     <!-- Audio Elements (Muted by default to prevent auto-play policy issues) -->
-    <audio id="shoot-sound" src="https://freesound.org/data/previews/203/203207_3408017-lq.mp3" preload="auto" muted></audio>
-    <audio id="pop-sound" src="https://freesound.org/data/previews/320/320875_5288225-lq.mp3" preload="auto" muted></audio>
-    <audio id="bg-music" src="https://freesound.org/data/previews/273/273187_33454-lq.mp3" loop preload="auto" muted></audio>
+    <audio id="shoot-sound" src="shoot.wav" preload="auto" muted></audio>
+    <audio id="pop-sound" src="pop.mp3" preload="auto" muted></audio>
+    <audio id="bg-music" src="bg-music.mp3" loop preload="auto" muted></audio>
     
     <!-- NEW AUDIO ELEMENTS -->
     <!-- Bomb Blast (Game Over) Sound -->
@@ -217,199 +217,178 @@
         const ctx = canvas.getContext('2d');
         const instructionPopup = document.getElementById('instruction-popup');
         const gameOverPopup = document.getElementById('game-over-popup');
-        const closeButton = instructionPopup.querySelector('.close-button'); 
-        const startButton = gameOverPopup.querySelector('.start-button'); 
+        const closeButton = instructionPopup.querySelector('.close-button');
+        const startButton = gameOverPopup.querySelector('.start-button');
         const scoreboard = document.getElementById('scoreboard');
         const finalScoreEl = document.getElementById('final-score');
-        const livesDisplay = document.getElementById('lives-display'); 
+        const livesDisplay = document.getElementById('lives-display');
         const pausePlayBtn = document.getElementById('pause-play-btn');
         const soundToggleBtn = document.getElementById('sound-toggle-btn');
         const themeToggleBtn = document.getElementById('theme-toggle-btn');
         const fireBtn = document.getElementById('fire-btn');
         const powerupStatusEl = document.getElementById('powerup-status');
-        
+
         const difficultySlider = document.getElementById('difficulty');
 
-        // Existing Audio
+        // Audio Elements
         const shootSound = document.getElementById('shoot-sound');
         const popSound = document.getElementById('pop-sound');
         const bgMusic = document.getElementById('bg-music');
-        
-        // NEW AUDIO
         const bombBlastSound = document.getElementById('bomb-blast-sound');
         const powerupSound = document.getElementById('powerup-sound');
         const lifeLossSound = document.getElementById('life-loss-sound');
 
-
+        // Game State
         let player;
         let projectiles = [];
         let balloons = [];
         let particles = [];
         let gunPowerups = [];
-        let lifePowerups = []; 
-        let shieldPowerups = []; 
+        let lifePowerups = [];
+        let shieldPowerups = [];
         let score = 0;
-        let lives = 5; 
-        const MAX_LIVES = 5; 
+        let lives = 5;
+        const MAX_LIVES = 5;
         let gameRunning = false;
         let isPaused = false;
-        let isMuted = true; 
+        let isMuted = true;
         let keys = {};
         let isShooting = false;
         let shootInterval;
-        let balloonSpawnRate; 
+        let balloonSpawnRate;
+        let animationFrameId;
 
         // Power-up state
         let multiGunActive = false;
-        let multiGunTimer = 0; // Frames remaining (60 frames/second)
-        let shieldActive = false; 
-        let shieldTimer = 0; // Frames remaining (60 frames/second)
+        let multiGunTimer = 0; // Frames remaining
+        let shieldActive = false;
+        let shieldTimer = 0; // Frames remaining
 
         // --- GAME CLASSES ---
 
         class Player {
             constructor() {
                 this.width = 100;
-                this.height = 30; // Shorter base for artillery
+                this.height = 30; // Logical height, visual is taller
                 this.x = canvas.width / 2 - this.width / 2;
-                this.y = canvas.height - this.height;
+                this.y = canvas.height; // Positioned at the very bottom
                 this.speed = 10;
-                this.barrelAngle = -80 * (Math.PI / 180); // 80 degrees up
+                this.barrelAngle = -90 * (Math.PI / 180); // Straight up
                 this.barrelLength = 60;
                 this.barrelWidth = 15;
+
+                // Constants for drawing the cannon
+                this.BASE_VISUAL_HEIGHT = 60;
+                this.PIVOT_RADIUS = 18;
+                this.BARREL_LENGTH_MULTIPLIER = 1.6;
+            }
+
+            // Returns the main pivot point for the barrel
+            _getPivot() {
+                const centerX = this.x + this.width / 2;
+                const topOfBaseY = this.y - this.BASE_VISUAL_HEIGHT;
+                const pivotY = topOfBaseY + this.PIVOT_RADIUS;
+                return { x: centerX, y: pivotY };
+            }
+
+            // Returns the position of the main barrel's tip
+            getBarrelTip() {
+                const pivot = this._getPivot();
+                const actualBarrelLength = this.barrelLength * this.BARREL_LENGTH_MULTIPLIER;
+                const tipX = pivot.x + actualBarrelLength * Math.cos(this.barrelAngle);
+                const tipY = pivot.y + actualBarrelLength * Math.sin(this.barrelAngle);
+                return { x: tipX, y: tipY };
             }
 
             draw() {
-                const centerX = this.x + this.width / 2;
-                const baseHeight = 15;
-                const pivotY = this.y + baseHeight;
+                const TOWER_COLOR = '#3B3C42';
+                const ARMOR_COLOR = '#6E737C';
+                const PIVOT_COLOR = '#9C9EA3';
+                const BARREL_COLOR = '#44464D';
+                const BARREL_DETAIL_COLOR = '#6E737C';
 
-               // --- Enhanced Cannon Drawing ---
+                const pivot = this._getPivot();
+                const topOfBaseY = this.y - this.BASE_VISUAL_HEIGHT;
 
-// Define constants for the new, taller design
-const BASE_VISUAL_HEIGHT = 60; 
-const PIVOT_RADIUS = 18;
-const BARREL_LENGTH_MULTIPLIER = 1.6; // Make the barrel 60% longer
-const TOWER_COLOR = '#3B3C42'; // Dark Grey/Black for the tower
-const ARMOR_COLOR = '#6E737C'; // Medium Grey for highlights
+                // 1. Draw the Armored Base
+                ctx.fillStyle = '#2A2B30';
+                ctx.fillRect(this.x, this.y - 10, this.width, 10);
+                ctx.fillStyle = TOWER_COLOR;
+                ctx.fillRect(this.x + 5, this.y - this.BASE_VISUAL_HEIGHT, this.width - 10, this.BASE_VISUAL_HEIGHT);
+                ctx.fillStyle = ARMOR_COLOR;
+                ctx.beginPath();
+                ctx.moveTo(this.x + 5, topOfBaseY + 15);
+                ctx.lineTo(this.x + 5, this.y - 10);
+                ctx.lineTo(this.x + this.width - 5, this.y - 10);
+                ctx.lineTo(this.x + this.width - 5, topOfBaseY + 15);
+                ctx.fill();
 
-// Calculate new center and pivot points based on the taller base
-// Assuming this.y is the bottom Y coordinate (ground level)
-const topOfBaseY = this.y - BASE_VISUAL_HEIGHT;
-const centerX = this.x + this.width / 2;
-// The pivot is located near the top of the visual base
-const pivotY = topOfBaseY + PIVOT_RADIUS; 
+                // 2. Draw the Gun Mount (Pivot)
+                ctx.fillStyle = PIVOT_COLOR;
+                ctx.beginPath();
+                ctx.arc(pivot.x, pivot.y, this.PIVOT_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
 
-// 1. Draw the Armored Base (Taller, fixed lower body)
-// Bottom Anchor (Darker)
-ctx.fillStyle = '#2A2B30'; 
-ctx.fillRect(this.x, this.y - 10, this.width, 10);
+                // 3. Draw the Barrel
+                ctx.save(); // Save context for rotation
+                ctx.translate(pivot.x, pivot.y);
+                ctx.rotate(this.barrelAngle);
 
-// Main Tower (Taller, with rounded corners/slight taper, but using rect for simplicity)
-ctx.fillStyle = TOWER_COLOR;
-// Draw the main tower section
-ctx.fillRect(this.x + 5, this.y - BASE_VISUAL_HEIGHT, this.width - 10, BASE_VISUAL_HEIGHT);
+                const actualBarrelLength = this.barrelLength * this.BARREL_LENGTH_MULTIPLIER;
+                const actualBarrelWidth = this.barrelWidth;
 
-// Add a slight highlight/armor plate to the front of the tower
-ctx.fillStyle = ARMOR_COLOR;
-ctx.beginPath();
-ctx.moveTo(this.x + 5, topOfBaseY + 15);
-ctx.lineTo(this.x + 5, this.y - 10);
-ctx.lineTo(this.x + this.width - 5, this.y - 10);
-ctx.lineTo(this.x + this.width - 5, topOfBaseY + 15);
-ctx.fill();
+                ctx.fillStyle = BARREL_COLOR;
+                ctx.fillRect(-actualBarrelWidth / 2, 0, actualBarrelWidth, -actualBarrelLength);
+                ctx.fillStyle = BARREL_DETAIL_COLOR;
+                ctx.fillRect(-actualBarrelWidth / 2 + 2, -actualBarrelLength * 0.9, actualBarrelWidth - 4, 5);
 
-
-// 2. Draw the Gun Mount (Pivot point - Larger and more prominent)
-ctx.fillStyle = '#9C9EA3'; // Metallic Silver
-ctx.beginPath();
-ctx.arc(centerX, pivotY, PIVOT_RADIUS, 0, Math.PI * 2);
-ctx.fill();
-
-// 3. Draw the Barrel
-ctx.save();
-ctx.translate(centerX, pivotY);
-
-// Rotate to the angle (e.g., 80 degrees up)
-// The barrel angle should be adjusted for the new look, ensuring a strong upward angle is possible
-ctx.rotate(this.barrelAngle); 
-
-// Calculate the new, longer barrel length
-const actualBarrelLength = this.barrelLength * BARREL_LENGTH_MULTIPLIER;
-const actualBarrelWidth = this.barrelWidth;
-
-// Draw the main barrel (Thicker, darker steel)
-ctx.fillStyle = '#44464D';
-// The Y start is slightly inside the pivot mount (e.g., -5) and extends upwards (negative Y direction)
-ctx.fillRect(-actualBarrelWidth / 2, -5, actualBarrelWidth, -actualBarrelLength); 
-
-// Draw a detail line on the main barrel
-ctx.fillStyle = '#6E737C';
-ctx.fillRect(-actualBarrelWidth / 2 + 2, -10, actualBarrelWidth - 4, 3);
-
-
-// Draw the side barrels for Multi-Gun Mode (Futuristic Energy Rails)
-if (multiGunActive) {
-    const ENERGY_COLOR = 'rgba(0, 255, 255, 0.9)'; // Electric Cyan
-    const sideBarrelWidth = 5;
-    const sideBarrelOffset = actualBarrelWidth / 2 + 3;
-    
-    // Left Energy Rail
-    ctx.fillStyle = ENERGY_COLOR; 
-    // Offset X to the left, Y starts a bit down, extends up
-    ctx.fillRect(-sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
-
-    // Right Energy Rail
-    ctx.fillRect(sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
-}
-
-// Restore context rotation and translation
-ctx.restore();
-
-                ctx.restore(); // Restore all translations and rotations
+                if (multiGunActive) {
+                    const ENERGY_COLOR = 'rgba(0, 255, 255, 0.9)';
+                    const sideBarrelWidth = 5;
+                    const sideBarrelOffset = actualBarrelWidth / 2 + 3;
+                    ctx.fillStyle = ENERGY_COLOR;
+                    ctx.fillRect(-sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
+                    ctx.fillRect(sideBarrelOffset - sideBarrelWidth / 2, -10, sideBarrelWidth, -actualBarrelLength * 0.9);
+                }
+                ctx.restore(); // Restore context after rotation
 
                 // 4. Draw Shield effect
                 if (shieldActive) {
                     ctx.strokeStyle = 'cyan';
                     ctx.lineWidth = 5;
                     ctx.beginPath();
-                    // Pulse effect
-                    const shieldPulse = Math.sin(Date.now() / 150) * 5; 
-                    ctx.arc(centerX, pivotY, this.width * 0.7 + shieldPulse, 0, Math.PI * 2);
+                    const shieldPulse = Math.sin(Date.now() / 150) * 5;
+                    ctx.arc(pivot.x, pivot.y, this.width * 0.7 + shieldPulse, 0, Math.PI * 2);
                     ctx.stroke();
                 }
             }
 
             update() {
-                if (keys['ArrowLeft'] && this.x > 0) {
-                    this.x -= this.speed;
-                }
-                if (keys['ArrowRight'] && this.x < canvas.width - this.width) {
-                    this.x += this.speed;
-                }
-                // Clamp position if moved via mouse/touch
+                if (keys['ArrowLeft'] && this.x > 0) this.x -= this.speed;
+                if (keys['ArrowRight'] && this.x < canvas.width - this.width) this.x += this.speed;
                 this.x = Math.max(0, Math.min(this.x, canvas.width - this.width));
             }
         }
 
         class Projectile {
-            constructor(x, y) {
+            constructor(x, y, angle) {
                 this.x = x;
                 this.y = y;
                 this.radius = 7;
                 this.speed = 15;
                 this.color = 'orange';
+                this.vx = this.speed * Math.cos(angle);
+                this.vy = this.speed * Math.sin(angle);
             }
-
             draw() {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fillStyle = this.color;
                 ctx.fill();
             }
-
             update() {
-                this.y -= this.speed;
+                this.x += this.vx;
+                this.y += this.vy;
             }
         }
 
@@ -421,136 +400,68 @@ ctx.restore();
                 const baseSpeed = Math.random() * 1.5 + 0.5;
                 const intensity = parseFloat(difficultySlider.value);
                 const difficultyFactor = (intensity / 10) * 1.5;
-                this.speed = baseSpeed + difficultyFactor; 
-                this.isBomb = Math.random() < 0.05; 
+                this.speed = baseSpeed + difficultyFactor;
+                this.isBomb = Math.random() < 0.08; // Slightly increased bomb chance
                 this.color = this.isBomb ? '#333' : `hsl(${Math.random() * 360}, 100%, 50%)`;
-                this.maxHealth = Math.floor(this.radius / 10) || 1; 
+                this.maxHealth = Math.floor(this.radius / 15) || 1;
                 this.health = this.maxHealth;
                 this.points = Math.floor(60 - this.radius);
             }
-
             draw() {
                 ctx.save();
-                
                 if (this.isBomb) {
-                    // Bomb visualization: Black with intense red glow
-                    ctx.strokeStyle = '#ff0000'; 
+                    ctx.strokeStyle = '#ff0000';
                     ctx.lineWidth = 3;
-                    ctx.shadowColor = '#ff4500'; 
+                    ctx.shadowColor = '#ff4500';
                     ctx.shadowBlur = 15;
-                    
                     ctx.beginPath();
                     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = '#111'; // Black core
+                    ctx.fillStyle = '#111';
                     ctx.fill();
                     ctx.stroke();
-
-                    ctx.shadowBlur = 0; 
-                    ctx.lineWidth = 1;
-                    
-                    // Skull emoji
+                    ctx.shadowBlur = 0;
                     ctx.fillStyle = '#fff';
                     ctx.font = `${this.radius}px serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('💀', this.x, this.y);
-
                 } else {
-                    // Regular Balloon visualization
-                    if (this.health < this.maxHealth) {
-                        ctx.globalAlpha = 0.5 + (this.health / this.maxHealth) * 0.5;
-                    }
+                    if (this.health < this.maxHealth) ctx.globalAlpha = 0.5 + (this.health / this.maxHealth) * 0.5;
                     ctx.beginPath();
                     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                     ctx.fillStyle = this.color;
                     ctx.fill();
                 }
-
                 ctx.restore();
             }
-
-            update() {
-                this.y += this.speed;
-            }
+            update() { this.y += this.speed; }
         }
 
-        class GunPowerUp {
-            constructor() {
+        class PowerUp {
+            constructor(emoji, health = 1) {
                 this.width = 50;
                 this.height = 50;
                 this.x = Math.random() * (canvas.width - this.width);
                 this.y = -this.height;
                 this.speed = 2;
-                this.health = 3;
+                this.emoji = emoji;
+                this.health = health;
+                this.maxHealth = health;
             }
-
             draw() {
-                ctx.fillStyle = 'gold';
                 ctx.font = '40px serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('🔫', this.x + this.width / 2, this.y + this.height / 2); 
-                
-                // Health Indicator
-                ctx.fillStyle = 'white';
-                ctx.fillRect(this.x, this.y + this.height + 5, this.width, 10);
-                ctx.fillStyle = 'red';
-                ctx.fillRect(this.x, this.y + this.height + 5, this.width * (this.health / 3), 10);
+                ctx.fillText(this.emoji, this.x + this.width / 2, this.y + this.height / 2);
+                if (this.maxHealth > 1) {
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(this.x, this.y + this.height + 5, this.width, 10);
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(this.x, this.y + this.height + 5, this.width * (this.health / this.maxHealth), 10);
+                }
             }
-
-            update() {
-                this.y += this.speed;
-            }
+            update() { this.y += this.speed; }
         }
-
-        class LifePowerUp {
-            constructor() {
-                this.width = 50;
-                this.height = 50;
-                this.x = Math.random() * (canvas.width - this.width);
-                this.y = -this.height;
-                this.speed = 2;
-                this.health = 1; // One hit to collect
-            }
-
-            draw() {
-                ctx.fillStyle = 'white';
-                ctx.font = '40px serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                // Using a stylized heart emoji
-                ctx.fillText('♥', this.x + this.width / 2, this.y + this.height / 2 + 5); 
-            }
-
-            update() {
-                this.y += this.speed;
-            }
-        }
-        
-        class ShieldPowerUp {
-            constructor() {
-                this.width = 50;
-                this.height = 50;
-                this.x = Math.random() * (canvas.width - this.width);
-                this.y = -this.height;
-                this.speed = 2;
-                this.health = 1; // One hit to collect
-            }
-
-            draw() {
-                ctx.fillStyle = 'cyan';
-                ctx.font = '40px serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                // Using a shield emoji
-                ctx.fillText('🛡️', this.x + this.width / 2, this.y + this.height / 2); 
-            }
-
-            update() {
-                this.y += this.speed;
-            }
-        }
-
 
         class Particle {
             constructor(x, y, color) {
@@ -558,11 +469,10 @@ ctx.restore();
                 this.y = y;
                 this.color = color;
                 this.radius = Math.random() * 3 + 1;
-                this.vx = (Math.random() - 0.5) * 5;
-                this.vy = (Math.random() - 0.5) * 5;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
                 this.alpha = 1;
             }
-
             draw() {
                 ctx.save();
                 ctx.globalAlpha = this.alpha;
@@ -572,11 +482,10 @@ ctx.restore();
                 ctx.fill();
                 ctx.restore();
             }
-
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
-                this.alpha -= 0.05;
+                this.alpha -= 0.04;
             }
         }
 
@@ -590,22 +499,19 @@ ctx.restore();
         }
 
         function gainLife() {
-            playSound(powerupSound); // Play positive sound for gaining life
+            playSound(powerupSound);
             if (lives < MAX_LIVES) {
                 lives++;
                 updateLivesUI();
                 powerupStatusEl.textContent = '♥ EXTRA LIFE GAINED!';
             } else {
-                powerupStatusEl.textContent = '♥ MAX LIVES REACHED! (Points +100)';
+                powerupStatusEl.textContent = '♥ MAX LIVES! (+100 Score)';
                 score += 100;
                 scoreboard.textContent = `Score: ${score}`;
             }
-            // Clear status after a moment
             setTimeout(() => {
-                if (powerupStatusEl.textContent.includes('LIFE') || powerupStatusEl.textContent.includes('MAX LIVES')) {
-                    updatePowerupTimers(); 
-                }
-            }, 1000);
+                if (powerupStatusEl.textContent.includes('LIFE')) updatePowerupTimers();
+            }, 1500);
         }
 
         function updateLivesUI() {
@@ -613,139 +519,92 @@ ctx.restore();
             for (let i = 0; i < MAX_LIVES; i++) {
                 const heart = document.createElement('span');
                 heart.className = `text-2xl transition-colors duration-300`;
-                // Use a full red heart for remaining lives, and a gray outline for lost lives
-                heart.textContent = '♥'; 
-                heart.style.color = i < lives ? '#ff4081' : '#4b5563'; // Bright Pink/Red for life, Gray for lost
+                heart.textContent = '♥';
+                heart.style.color = i < lives ? '#ff4081' : '#4b5563';
                 livesDisplay.appendChild(heart);
             }
         }
 
         function loseLife() {
             if (shieldActive) {
-                // Shield takes the hit
-                powerupStatusEl.textContent = '🛡️ SHIELD ACTIVATED! Hit absorbed.';
-                // The main update loop will handle clearing the status after a delay
+                powerupStatusEl.textContent = '🛡️ SHIELD PROTECTED YOU!';
                 setTimeout(() => {
-                    if (powerupStatusEl.textContent.includes('SHIELD ACTIVATED')) {
-                        updatePowerupTimers(); 
-                    }
-                }, 1000);
-                return; // Shield active, block life loss
+                    if (powerupStatusEl.textContent.includes('SHIELD PROTECTED')) updatePowerupTimers();
+                }, 1500);
+                return;
             }
-            
             if (lives <= 0) return;
-            
-            playSound(lifeLossSound); // Play negative sound for life loss
-
+            playSound(lifeLossSound);
             lives--;
             updateLivesUI();
-
-            // Visual feedback: Flash the lives display red
             livesDisplay.classList.add('life-lost');
-            setTimeout(() => {
-                livesDisplay.classList.remove('life-lost');
-            }, 300);
-
-            if (lives <= 0) {
-                gameOver(false); // Game Over due to life loss, not bomb
-            }
+            setTimeout(() => livesDisplay.classList.remove('life-lost'), 300);
+            if (lives <= 0) gameOver(false);
         }
 
         function init() {
-            // 1. Set difficulty: Adjusted for wider range
-            const intensity = parseFloat(difficultySlider.value);
-            // Scaling: 0.002 (at intensity 1) to ~0.035 (at intensity 10)
-            balloonSpawnRate = 0.002 + (intensity - 1) * 0.00366; 
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
             
-            // 2. Reset game state and lives
+            const intensity = parseFloat(difficultySlider.value);
+            balloonSpawnRate = 0.002 + (intensity - 1) * 0.00366;
+            
             resizeCanvas();
             player = new Player();
             projectiles = [];
             balloons = [];
             particles = [];
             gunPowerups = [];
-            lifePowerups = []; 
-            shieldPowerups = []; 
+            lifePowerups = [];
+            shieldPowerups = [];
             score = 0;
-            lives = MAX_LIVES; // Reset lives
+            lives = MAX_LIVES;
             scoreboard.textContent = 'Score: 0';
-            updateLivesUI(); // Initialize lives UI
+            updateLivesUI();
             
-            // 3. Start game flags and powerup states
             gameRunning = true;
             isPaused = false;
             pausePlayBtn.textContent = 'Pause';
             multiGunActive = false;
             multiGunTimer = 0;
-            shieldActive = false; 
-            shieldTimer = 0; 
+            shieldActive = false;
+            shieldTimer = 0;
             powerupStatusEl.textContent = '';
-
-
-            // 4. Hide popups and start sound
+            
             instructionPopup.classList.add('hidden');
             gameOverPopup.classList.add('hidden');
-
-            // 5. Play music if not muted
-            if (!isMuted) bgMusic.play().catch(e => console.log("Music auto-play failed, user interaction needed."));
             
-            // 6. Start the game loop
+            if (!isMuted) bgMusic.play().catch(e => console.log("Music auto-play failed."));
+            
             update();
         }
 
         function resizeCanvas() {
-            canvas.width = Math.min(window.innerWidth * 0.9, 800);
-            canvas.height = window.innerHeight * 0.8;
-            if (player) player.y = canvas.height - player.height;
-        }
-
-        function getBarrelTipPosition(player) {
-            const centerX = player.x + player.width / 2;
-            const pivotY = player.y + 15;
-            const angle = player.barrelAngle;
-            const length = player.barrelLength; 
-
-            // Calculate tip position using trigonometry
-            // x = pivotX + length * cos(angle - 90 deg)
-            // y = pivotY + length * sin(angle - 90 deg)
-            const projectileX = centerX + length * Math.cos(angle - Math.PI / 2);
-            const projectileY = pivotY + length * Math.sin(angle - Math.PI / 2);
-            
-            return { x: projectileX, y: projectileY };
+            const gameContainer = document.querySelector('body');
+            const maxWidth = 800;
+            const aspectRatio = 4 / 3;
+            const w = Math.min(gameContainer.clientWidth * 0.95, maxWidth);
+            const h = w / aspectRatio;
+            canvas.width = w;
+            canvas.height = h;
+            if (player) player.y = canvas.height;
         }
 
         function shoot() {
             if (gameRunning && !isPaused) {
-                const { x: mainX, y: mainY } = getBarrelTipPosition(player);
-
-                // Main projectile
-                projectiles.push(new Projectile(mainX, mainY));
-
-                // Multi-gun projectiles
+                const tip = player.getBarrelTip();
+                const mainAngle = player.barrelAngle;
+                projectiles.push(new Projectile(tip.x, tip.y, mainAngle));
                 if (multiGunActive) {
-                    // Approximate side barrel positions
-                    const sideLength = player.barrelLength * 0.75;
-                    const angleOffset = 5 * (Math.PI / 180);
-
-                    // Left barrel tip
-                    let leftX = player.x + player.width / 2 + sideLength * Math.cos(player.barrelAngle - Math.PI / 2 - angleOffset);
-                    let leftY = player.y + 15 + sideLength * Math.sin(player.barrelAngle - Math.PI / 2 - angleOffset);
-                    projectiles.push(new Projectile(leftX, leftY));
-
-                    // Right barrel tip
-                    let rightX = player.x + player.width / 2 + sideLength * Math.cos(player.barrelAngle - Math.PI / 2 + angleOffset);
-                    let rightY = player.y + 15 + sideLength * Math.sin(player.barrelAngle - Math.PI / 2 + angleOffset);
-                    projectiles.push(new Projectile(rightX, rightY));
+                    const angleOffset = 10 * (Math.PI / 180);
+                    projectiles.push(new Projectile(tip.x, tip.y, mainAngle - angleOffset));
+                    projectiles.push(new Projectile(tip.x, tip.y, mainAngle + angleOffset));
                 }
-
                 playSound(shootSound);
             }
         }
 
         function updatePowerupTimers() {
             let statusText = '';
-            
-            // 1. Multi-Gun Timer (10 seconds)
             if (multiGunTimer > 0) {
                 multiGunTimer--;
                 statusText += `🔫 Multi-Gun: ${Math.ceil(multiGunTimer / 60)}s`;
@@ -753,8 +612,6 @@ ctx.restore();
             } else {
                 multiGunActive = false;
             }
-
-            // 2. Shield Timer (12 seconds)
             if (shieldTimer > 0) {
                 if (statusText) statusText += ' | ';
                 shieldTimer--;
@@ -763,191 +620,116 @@ ctx.restore();
             } else {
                 shieldActive = false;
             }
-
             powerupStatusEl.textContent = statusText;
         }
 
-        // Game over flag: isBombHit tells us if it was a bomb that caused the loss
         function gameOver(isBombHit) {
             gameRunning = false;
             clearInterval(shootInterval);
+            isShooting = false;
             bgMusic.pause();
-
-            if (isBombHit) {
-                playSound(bombBlastSound);
-            }
-            
+            if (isBombHit) playSound(bombBlastSound);
             finalScoreEl.textContent = score;
             gameOverPopup.classList.remove('hidden');
         }
 
-
-        // Main Game Loop
         function update() {
             if (!gameRunning) return;
-            if (isPaused) {
-                requestAnimationFrame(update);
-                return;
-            }
+            
+            animationFrameId = requestAnimationFrame(update);
+
+            if (isPaused) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Spawn Balloons and Powerups
+            // Spawn items
             if (Math.random() < balloonSpawnRate) balloons.push(new Balloon());
-            if (Math.random() < 0.002) gunPowerups.push(new GunPowerUp());
-            if (Math.random() < 0.001) shieldPowerups.push(new ShieldPowerUp()); 
-            if (Math.random() < 0.0005) lifePowerups.push(new LifePowerUp()); 
+            if (Math.random() < 0.002) gunPowerups.push(new PowerUp('🔫', 3));
+            if (Math.random() < 0.001) shieldPowerups.push(new PowerUp('🛡️'));
+            if (Math.random() < 0.0008) lifePowerups.push(new PowerUp('♥'));
 
             player.update();
             player.draw();
 
-            // 1. Update and draw projectiles (cleanup off-screen)
+            // Update projectiles
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
                 p.update();
                 p.draw();
-                if (p.y < 0) projectiles.splice(i, 1);
+                if (p.y < -p.radius || p.x < -p.radius || p.x > canvas.width + p.radius) {
+                    projectiles.splice(i, 1);
+                }
             }
 
-            // 2. Update and draw balloons (check for game loss and hits)
+            // Update balloons
             for (let i = balloons.length - 1; i >= 0; i--) {
                 const b = balloons[i];
                 b.update();
                 b.draw();
-                
-                // Balloon missed the player - LIFE LOSS LOGIC
+
                 if (b.y - b.radius > canvas.height) {
-                    if (!b.isBomb) {
-                        loseLife(); // Lose a life (checks for shield inside)
-                    } 
-                    balloons.splice(i, 1); 
-                    continue; 
+                    if (!b.isBomb) loseLife();
+                    balloons.splice(i, 1);
+                    continue;
                 }
-                
-                // Projectile collision detection
+
                 for (let j = projectiles.length - 1; j >= 0; j--) {
                     const p = projectiles[j];
-                    const dist = Math.hypot(p.x - b.x, p.y - b.y);
-
-                    if (dist - b.radius - p.radius < 1) {
-                        
-                        if (b.isBomb) {
-                            // Create dramatic black/red explosion particles
-                            for (let k = 0; k < 100; k++) {
-                                particles.push(new Particle(b.x, b.y, Math.random() < 0.5 ? '#ff4500' : '#111'));
-                            }
-                            gameOver(true); // Instant game over for hitting a bomb
-                            return;
-                        }
-                        
-                        b.health--;
+                    if (Math.hypot(p.x - b.x, p.y - b.y) - b.radius - p.radius < 1) {
                         projectiles.splice(j, 1);
-                        
+                        if (b.isBomb) {
+                            for (let k = 0; k < 100; k++) particles.push(new Particle(b.x, b.y, Math.random() < 0.5 ? '#ff4500' : '#111'));
+                            gameOver(true);
+                            return; // Exit update loop immediately
+                        }
+                        b.health--;
                         if (b.health <= 0) {
-                            // Balloon popped
                             playSound(popSound);
-                            for (let k = 0; k < b.radius / 2; k++) {
-                                particles.push(new Particle(b.x, b.y, b.color));
-                            }
+                            for (let k = 0; k < b.radius / 2; k++) particles.push(new Particle(b.x, b.y, b.color));
                             score += b.points;
                             scoreboard.textContent = `Score: ${score}`;
                             balloons.splice(i, 1);
-                            i--; 
-                            break; 
+                            break; // Move to next balloon
                         }
                     }
                 }
             }
 
+            // Update powerups
+            const allPowerups = [gunPowerups, shieldPowerups, lifePowerups];
+            for (let type = 0; type < allPowerups.length; type++) {
+                const powerupList = allPowerups[type];
+                for (let i = powerupList.length - 1; i >= 0; i--) {
+                    const item = powerupList[i];
+                    item.update();
+                    item.draw();
 
-            // 3. Update and draw powerups (Gun)
-            for (let i = gunPowerups.length - 1; i >= 0; i--) {
-                const gun = gunPowerups[i];
-                gun.update();
-                gun.draw();
-                if (gun.y > canvas.height) {
-                    gunPowerups.splice(i, 1);
-                    continue;
-                }
+                    if (item.y > canvas.height) {
+                        powerupList.splice(i, 1);
+                        continue;
+                    }
 
-                for (let j = projectiles.length - 1; j >= 0; j--) {
-                    const p = projectiles[j];
-                    const gunCenterX = gun.x + gun.width / 2;
-                    const gunCenterY = gun.y + gun.height / 2; 
-                    const dist = Math.hypot(p.x - gunCenterX, p.y - gunCenterY);
-
-                    if (dist < gun.width / 2 + p.radius) {
-                        gun.health--;
-                        projectiles.splice(j, 1);
-
-                        if (gun.health <= 0) {
-                            playSound(powerupSound); // Play positive sound for pickup
-                            multiGunActive = true;
-                            multiGunTimer = 10 * 60; // 10 seconds at 60 FPS
-                            powerupStatusEl.textContent = '🔫 MULTI-GUN ACTIVATED!';
-                            gunPowerups.splice(i, 1);
-                            break; 
+                    for (let j = projectiles.length - 1; j >= 0; j--) {
+                        const p = projectiles[j];
+                        const itemCenterX = item.x + item.width / 2;
+                        const itemCenterY = item.y + item.height / 2;
+                        if (Math.hypot(p.x - itemCenterX, p.y - itemCenterY) < item.width / 2 + p.radius) {
+                            projectiles.splice(j, 1);
+                            item.health--;
+                            if (item.health <= 0) {
+                                playSound(powerupSound);
+                                powerupList.splice(i, 1);
+                                if (type === 0) multiGunTimer = 10 * 60; // Gun
+                                else if (type === 1) shieldTimer = 12 * 60; // Shield
+                                else if (type === 2) gainLife(); // Life
+                                break; // Move to next powerup
+                            }
                         }
                     }
                 }
             }
-            
-            // 4. Update and draw powerups (Life)
-            for (let i = lifePowerups.length - 1; i >= 0; i--) {
-                const life = lifePowerups[i];
-                life.update();
-                life.draw();
-                if (life.y > canvas.height) {
-                    lifePowerups.splice(i, 1);
-                    continue;
-                }
 
-                for (let j = projectiles.length - 1; j >= 0; j--) {
-                    const p = projectiles[j];
-                    const lifeCenterX = life.x + life.width / 2;
-                    const lifeCenterY = life.y + life.height / 2; 
-                    const dist = Math.hypot(p.x - lifeCenterX, p.y - lifeCenterY);
-
-                    if (dist < life.width / 2 + p.radius) {
-                        projectiles.splice(j, 1);
-                        lifePowerups.splice(i, 1);
-                        gainLife(); // EFFECT: Gain life (calls playSound inside)
-                        i--;
-                        break;
-                    }
-                }
-            }
-
-            // 5. Update and draw powerups (Shield)
-            for (let i = shieldPowerups.length - 1; i >= 0; i--) {
-                const shield = shieldPowerups[i];
-                shield.update();
-                shield.draw();
-                if (shield.y > canvas.height) {
-                    shieldPowerups.splice(i, 1);
-                    continue;
-                }
-
-                for (let j = projectiles.length - 1; j >= 0; j--) {
-                    const p = projectiles[j];
-                    const shieldCenterX = shield.x + shield.width / 2;
-                    const shieldCenterY = shield.y + shield.height / 2; 
-                    const dist = Math.hypot(p.x - shieldCenterX, p.y - shieldCenterY);
-
-                    if (dist < shield.width / 2 + p.radius) {
-                        projectiles.splice(j, 1);
-                        shieldPowerups.splice(i, 1);
-                        playSound(powerupSound); // Play positive sound for pickup
-                        shieldActive = true;
-                        shieldTimer = 12 * 60; // EFFECT: Activate shield for 12 seconds
-                        powerupStatusEl.textContent = '🛡️ SHIELD POWERUP COLLECTED!';
-                        i--;
-                        break;
-                    }
-                }
-            }
-
-            // 6. Update and draw particles (cleanup faded particles)
+            // Update particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 const p = particles[i];
                 p.update();
@@ -955,11 +737,8 @@ ctx.restore();
                 if (p.alpha <= 0) particles.splice(i, 1);
             }
 
-            // 7. Update powerup timers and request next frame
             updatePowerupTimers();
-            requestAnimationFrame(update);
         }
-
 
         function togglePause() {
             isPaused = !isPaused;
@@ -968,20 +747,17 @@ ctx.restore();
                 bgMusic.pause();
                 clearInterval(shootInterval);
             } else {
-                if (!isMuted) bgMusic.play().catch(e => {}); 
+                if (!isMuted) bgMusic.play().catch(e => {});
                 if (isShooting) shootInterval = setInterval(shoot, 150);
+                // Restart animation loop if it was paused
+                if (!animationFrameId) update();
             }
         }
 
         function toggleSound() {
             isMuted = !isMuted;
             soundToggleBtn.textContent = isMuted ? 'Sound On' : 'Sound Off';
-            
-            // Toggle muted status for ALL audio elements
-            [bgMusic, shootSound, popSound, bombBlastSound, powerupSound, lifeLossSound].forEach(audio => {
-                audio.muted = isMuted;
-            });
-
+            [bgMusic, shootSound, popSound, bombBlastSound, powerupSound, lifeLossSound].forEach(audio => audio.muted = isMuted);
             if (!isMuted && gameRunning && !isPaused) {
                 bgMusic.play().catch(e => console.log("Music play failed on toggle."));
             } else {
@@ -989,13 +765,13 @@ ctx.restore();
             }
         }
 
-        // --- EVENT LISTENERS (Includes mobile touch support) ---
-        
+        // --- EVENT LISTENERS ---
         window.addEventListener('resize', resizeCanvas);
         window.addEventListener('keydown', (e) => {
             keys[e.code] = true;
             if (e.code === 'Space' && !isShooting && gameRunning && !isPaused) {
                 isShooting = true;
+                shoot();
                 shootInterval = setInterval(shoot, 150);
             }
         });
@@ -1007,49 +783,42 @@ ctx.restore();
             }
         });
 
-        // Mouse/Touch movement
         canvas.addEventListener('mousemove', (e) => {
             if (!player || isPaused) return;
             const rect = canvas.getBoundingClientRect();
-            // Center the cannon base under the mouse/touch position
             player.x = e.clientX - rect.left - player.width / 2;
         });
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
             if (!player || isPaused) return;
             const rect = canvas.getBoundingClientRect();
-            if (e.touches.length > 0) {
-                player.x = e.touches[0].clientX - rect.left - player.width / 2;
-            }
-        });
+            if (e.touches.length > 0) player.x = e.touches[0].clientX - rect.left - player.width / 2;
+        }, { passive: false });
 
-        // Mobile Fire Button
         fireBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!isShooting && gameRunning && !isPaused) {
                 isShooting = true;
+                shoot();
                 shootInterval = setInterval(shoot, 150);
             }
-        });
+        }, { passive: false });
         fireBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             isShooting = false;
             clearInterval(shootInterval);
-        });
+        }, { passive: false });
 
         pausePlayBtn.addEventListener('click', togglePause);
         soundToggleBtn.addEventListener('click', toggleSound);
+        closeButton.addEventListener('click', init);
+        startButton.addEventListener('click', init);
 
-        closeButton.addEventListener('click', init); 
-        startButton.addEventListener('click', init); 
-
-        // Initial setup
         window.onload = () => {
             resizeCanvas();
             updateLivesUI();
             instructionPopup.classList.remove('hidden');
         };
-
     </script>
 </body>
 </html>
