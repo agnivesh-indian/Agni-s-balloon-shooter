@@ -112,6 +112,14 @@
         @media (min-width: 768px) {
             #fire-btn {
                 display: none;
+}
+        }
+        
+        /* NEW: Rule to expand canvas area downwards on mobile */
+        @media (max-width: 767px) {
+            #game-canvas {
+                /* Set a taller aspect ratio (e.g., 6:5) */
+                aspect-ratio: 1.2; 
             }
         }
     </style>
