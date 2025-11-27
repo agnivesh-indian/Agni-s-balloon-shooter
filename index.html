@@ -155,17 +155,17 @@
     </button>
 
     <!-- Audio Elements (Muted by default to prevent auto-play policy issues) -->
-    <audio id="shoot-sound" src="shoot.wav" preload="auto" muted></audio>
-    <audio id="pop-sound" src="pop.mp3" preload="auto" muted></audio>
-    <audio id="bg-music" src="bg-music.mp3" loop preload="auto" muted></audio>
+    <audio id="shoot-sound" src="shoot.wav" preload="auto"></audio>
+    <audio id="pop-sound" src="pop.mp3" preload="auto"></audio>
+    <audio id="bg-music" src="bg-music.mp3" loop preload="auto"></audio>
     
     <!-- NEW AUDIO ELEMENTS -->
     <!-- Bomb Blast (Game Over) Sound -->
-    <audio id="bomb-blast-sound" src="https://freesound.org/data/previews/143/143929_2393247-lq.mp3" preload="auto" muted></audio>
+    <audio id="bomb-blast-sound" src="https://freesound.org/data/previews/143/143929_2393247-lq.mp3" preload="auto"></audio>
     <!-- Powerup (Gun/Shield/Life) Pickup Sound (Chime) -->
-    <audio id="powerup-sound" src="https://freesound.org/data/previews/186/186851_2069818-lq.mp3" preload="auto" muted></audio>
+    <audio id="powerup-sound" src="https://freesound.org/data/previews/186/186851_2069818-lq.mp3" preload="auto"></audio>
     <!-- Life Loss/Hit Sound (Negative Buzzer) -->
-    <audio id="life-loss-sound" src="https://freesound.org/data/previews/327/327318_5625725-lq.mp3" preload="auto" muted></audio>
+    <audio id="life-loss-sound" src="https://freesound.org/data/previews/327/327318_5625725-lq.mp3" preload="auto"></audio>
 
 
     <!-- 1. Instruction/Start Popup -->
@@ -251,7 +251,7 @@
         const MAX_LIVES = 5;
         let gameRunning = false;
         let isPaused = false;
-        let isMuted = true;
+        let isMuted = false;
         let keys = {};
         let isShooting = false;
         let shootInterval;
@@ -599,7 +599,7 @@
 
         function resizeCanvas() {
             const gameContainer = document.querySelector('body');
-            const maxWidth = 600;
+            const maxWidth = 500;
             const aspectRatio = 4 / 3;
             const w = Math.min(gameContainer.clientWidth * 0.95, maxWidth);
             const h = w / aspectRatio;
